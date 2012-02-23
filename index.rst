@@ -25,6 +25,7 @@ Tutorial Parts
     docs/extending-the-model-blog-comments
     docs/customising-the-view-more-with-twig
     docs/testing-unit-and-functional-phpunit
+    docs/users-and-fosuserbundle
 
 Demo Website
 ------------
