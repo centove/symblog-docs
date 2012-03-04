@@ -7,7 +7,7 @@ At this point we now have a good start on our blog, and have accomplished quite 
 
 Security in Symfony2
 --------------------
-Security in Symfony is handled by the security `component <https://github.com/symfony/Security>`_ it comes bundled with the `Symfony Standard Edition <http://symfony.com/download>`_ so there is nothing else to install from the framework point of view. The basic goal is we want to identify users, authenticate them, then authorize them to do specific actions on the our blog.
+Security in Symfony is handled by the `security component <https://github.com/symfony/Security>`_ it comes bundled with the `Symfony Standard Edition <http://symfony.com/download>`_ so there is nothing else to install from the framework point of view. The basic goal is we want to identify users, authenticate them, then authorize them to do specific actions on the our blog.
 Symfony has excellent documentation on this in the `security <https://github.com/symfony/Security>`_ chapters in the book.
 
 After looking through the documentation we see we could very well build our own custom user manager and deal with all the little details that go along with that. However the good folks that call themselves `FriendsOfSymfony <https://github.com/FriendsOfSymfony>`_ have done all this work already and made it available for us. All we need to do is install it and use it.
@@ -226,11 +226,80 @@ To register a user ``http://symblog.dev/app_dev.php/register``.
 
 And so on, you'll notice however things don't look quite right and all our nice css and layout vanished. Don't fret we'll deal with that next.
 
+Layout updates
+--------------
+As we saw above the layout of the bundle isn't fitting into our layout very well, but as we'll see Symfony makes this easy to correct with a bit of twig magic and a few minor updates to our bundle. If we check the bundle `template documentation <https://github.com/FriendsOfSymfony/FOSUserBundle/blob/master/Resources/doc/overriding_templates.md>`_ we'll see there are a couple of ways to do this. We'll go ahead and use the child bundle approach as this will allow us to do other changes easily later on. So lets open up the `BloggerBlogBundle.php` file in our bundle and make it a child of the `FOSUserBundle`.
 
+.. code-block:: php
 
+    <?php
+    // src/Blogger/BloggerBlogBundle.php
+    namespace Blogger\BlogBundle;
+    
+    use Symfony\Component\HttpKernel\Bundle\Bundle;
+    
+    class BloggerBlogBundle extends Bundle
+    {
+        public function getParent()
+        {
+            return 'FOSUserBundle';
+        }
+    }
+    
 
-* Fixtures
-  Now that we have a User entity we'll need a few fixtures for it, as we are using a bundle for our User we have to take some special care to add the users to the database. While a normal fixture loader will get the information in the database the actual entries won't work as the UserManager isn't used to actually create the user. So we use the ContainerAware fixture loader as thus:
+What we have done here is tell the Symfony framework that the `BloggerBlogBundle` is a child of the `FOSUserBundle`. So now when the framework looks for `FOSUserBundle:<some resource>` it will check our bundle first to see if it exists, if not it will look in the parent, which is exactly what we want to happen.
+
+If we re-visit the login or register links we'll see that nothing has changed as of yet. A little digging in the `FOSUserBundle` Resources directory we'll see that all the output from the bundle is in a twig block `fos_user_content` so we'll want the contents of that in our layout somewhere. Now we could copy all the templates to our bundle and change the block from `fos_user_content` to one of our blocks or we could use a bit of twig and have twig render the content in one of our blocks. If we change our `base.html.twig` as such:
+
+.. code-block:: html
+
+    <!-- app/Resources/views/base.html.twig
+    ...
+    -->
+    <section class="main-col">
+        {% block body %}{{ block ('fos_user_content') }}{% endblock %}
+    </section>
+
+Reloading the ``http://symblog.dev/app_dev.php/login`` page now and we'll see the login form is now a part of our layout. All the other forms and links will be in the same place as well. 
+
+Conditional Links
+-----------------
+Now while we can use ``http://symblog.dev/app_dev.php/login`` to login to our application and ``http://symblog.dev/app_dev.php/logout`` to login and out of our blog that's not very convient. If we aren't logged in we'll want a login link somewhere and if we are we'll want a logout link. Lets update our ``base.html.twig`` to do this.
+
+.. code-block:: html
+
+    <!-- app/Resources/views/base.html.twig 
+     ...
+    -->
+                {% block navigation %}
+                        <nav>
+                            <ul class="navigation">
+                                <li><a href="{{ path('BloggerBlogBundle_homepage') }}">Home</a></li>
+                                <li><a href="{{ path('BloggerBlogBundle_about') }}">About</a></li>
+                                <li><a href="{{ path('BloggerBlogBundle_contact') }}">Contact</a></li>
+                    {% if is_granted("IS_AUTHENTICATED_REMEMBERED") %}
+                                <li><a href="{{ path('fos_user_profile_show') }}">{{ 'layout.logged_in_as'|trans({'%username%': app.user.username}, 'FOSUserBundle') }}</a></li>
+                                <li><a href="{{ path('fos_user_security_logout') }}">{{'layout.logout'|trans({}, 'FOSUserBundle') }}</a></li>
+                    {% else %}
+                                <li><a href="{{ path('fos_user_security_login') }}">{{ 'layout.login'|trans({}, 'FOSUserBundle') }}</a></li>
+                                <li><a href="{{ path('fos_user_registration_register') }}">{{ 'layout.register'|trans({}, 'FOSUserBundle') }}</a></li>
+                    {% endif %}
+                            </ul>
+                        </nav>
+
+Adding a user
+-------------
+We'll want a user to login and out with so we can test things:
+
+.. code-block:: bash
+
+    $ php app/console fos:user:create admin me@example.com <password>
+
+Now we can click on the login link and login with the user we just created.
+
+User fixture
+------------    
+While we can create a user on the command line what happens if we reload the database with the ``doctrine:fixtures:load`` command? The user goes away so we'll need a fixture loader for the user(s) we want to test with. If we look at the created schema for the user we see that there are some special fields that are handled via the FOSUserBundle and need to be handled before we persist them. To accomplish this we'll need to use the ``ContainerAware`` interface so we can get the UserManager class. We'll need a Fixture loader as such.
 
 .. code-block:: php
 
@@ -271,23 +340,16 @@ And so on, you'll notice however things don't look quite right and all our nice 
     
         public function getOrder()
         {
-        return 1;
+            return 1;
         }
     }
 
-* Update views to include the fos_views
-* doctrine-migrate
 
 Adding a field to the User Entity
 ---------------------------------
 
 * doctrine-migrate
 
-Override the bundle resources
------------------------------
-* Forms
-* Views
-* Translations
 
 Profile Editing/Password reset links
 ------------------------------------
